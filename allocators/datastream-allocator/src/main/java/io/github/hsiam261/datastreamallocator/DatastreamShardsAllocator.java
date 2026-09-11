@@ -60,6 +60,9 @@ public class DatastreamShardsAllocator implements ShardsAllocator {
 
     private void allocateUnassigned(RoutingAllocation allocation) {
         Metadata metadata = allocation.metadata();
+        // Mutating iterator — after each next(), you must call either:
+        //   initialize()      → place the shard on a node
+        //   removeAndIgnore() → record why it can't be placed (drives retry scheduling)
         RoutingNodes.UnassignedShards.UnassignedIterator iter =
             allocation.routingNodes().unassigned().iterator();
 
