@@ -1,0 +1,51 @@
+version: '3'
+services:
+  opensearch-node1:
+    build:
+      context: ..
+      dockerfile: tests/Dockerfile
+    container_name: opensearch-node1
+    environment:
+      - cluster.name=test-cluster
+      - node.name=node1
+      - discovery.seed_hosts=opensearch-node1,opensearch-node2,opensearch-node3
+      - cluster.initial_cluster_manager_nodes=node1,node2,node3
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - DISABLE_SECURITY_PLUGIN=true
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
+    ports:
+      - 9200:9200
+
+  opensearch-node2:
+    build:
+      context: ..
+      dockerfile: tests/Dockerfile
+    container_name: opensearch-node2
+    environment:
+      - cluster.name=test-cluster
+      - node.name=node2
+      - discovery.seed_hosts=opensearch-node1,opensearch-node2,opensearch-node3
+      - cluster.initial_cluster_manager_nodes=node1,node2,node3
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - DISABLE_SECURITY_PLUGIN=true
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
+
+  opensearch-node3:
+    build:
+      context: ..
+      dockerfile: tests/Dockerfile
+    container_name: opensearch-node3
+    environment:
+      - cluster.name=test-cluster
+      - node.name=node3
+      - discovery.seed_hosts=opensearch-node1,opensearch-node2,opensearch-node3
+      - cluster.initial_cluster_manager_nodes=node1,node2,node3
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - DISABLE_SECURITY_PLUGIN=true
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
