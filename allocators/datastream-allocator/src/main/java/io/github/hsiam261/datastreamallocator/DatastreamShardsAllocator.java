@@ -14,6 +14,7 @@ import org.opensearch.cluster.routing.allocation.RoutingAllocation;
 import org.opensearch.cluster.routing.allocation.ShardAllocationDecision;
 import org.opensearch.cluster.routing.allocation.allocator.ShardsAllocator;
 import org.opensearch.cluster.routing.allocation.decider.Decision;
+import org.opensearch.cluster.routing.allocation.decider.DiskThresholdDecider;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Setting;
 import org.opensearch.common.settings.Settings;
@@ -71,7 +72,9 @@ public class DatastreamShardsAllocator implements ShardsAllocator {
             for (RoutingNode node : candidates) {
                 Decision decision = allocation.deciders().canAllocate(shard, node, allocation);
                 if (decision.type() == Decision.Type.YES) {
-                    iter.initialize(node.nodeId(), null, 0L, allocation.changes());
+                    String existingAllocationId = shard.currentNodeId() != null
+                        ? shard.allocationId().getId() : null;
+                    iter.initialize(node.nodeId(), existingAllocationId, expectedShardSize(shard, allocation), allocation.changes());
                     assigned = true;
                     break;
                 }
@@ -105,7 +108,9 @@ public class DatastreamShardsAllocator implements ShardsAllocator {
                         Decision allocateDecision = allocation.deciders().canAllocate(shard, target, allocation);
                         if (allocateDecision.type() == Decision.Type.YES) {
                             allocation.routingNodes().relocateShard(
-                                shard, target.nodeId(), 0L, allocation.changes()
+                                shard, target.nodeId(),
+                                allocation.clusterInfo().getShardSize(shard, ShardRouting.UNAVAILABLE_EXPECTED_SHARD_SIZE),
+                                allocation.changes()
                             );
                             break;
                         }
@@ -320,6 +325,17 @@ public class DatastreamShardsAllocator implements ShardsAllocator {
             }
         }
         return count;
+    }
+
+    private long expectedShardSize(ShardRouting shard, RoutingAllocation allocation) {
+        return DiskThresholdDecider.getExpectedShardSize(
+            shard,
+            ShardRouting.UNAVAILABLE_EXPECTED_SHARD_SIZE,
+            allocation.clusterInfo(),
+            allocation.snapshotShardSizeInfo(),
+            allocation.metadata(),
+            allocation.routingTable()
+        );
     }
 
     private List<RoutingNode> sortedCandidates(RoutingAllocation allocation, String datastream, Metadata metadata) {
