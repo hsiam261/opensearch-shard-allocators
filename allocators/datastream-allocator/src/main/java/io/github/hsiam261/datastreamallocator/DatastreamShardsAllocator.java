@@ -69,6 +69,7 @@ public class DatastreamShardsAllocator implements ShardsAllocator {
             List<RoutingNode> candidates = sortedCandidates(allocation, datastream, metadata);
 
             boolean assigned = false;
+            boolean throttled = false;
             for (RoutingNode node : candidates) {
                 Decision decision = allocation.deciders().canAllocate(shard, node, allocation);
                 if (decision.type() == Decision.Type.YES) {
@@ -79,8 +80,17 @@ public class DatastreamShardsAllocator implements ShardsAllocator {
                     break;
                 }
                 if (decision.type() == Decision.Type.THROTTLE) {
+                    throttled = true;
                     break;
                 }
+            }
+            if (!assigned) {
+                iter.removeAndIgnore(
+                    throttled
+                        ? UnassignedInfo.AllocationStatus.DECIDERS_THROTTLED
+                        : UnassignedInfo.AllocationStatus.DECIDERS_NO,
+                    allocation.changes()
+                );
             }
         }
     }
