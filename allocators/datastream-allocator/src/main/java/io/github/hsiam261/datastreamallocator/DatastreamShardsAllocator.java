@@ -27,6 +27,9 @@ import java.util.Set;
 
 public class DatastreamShardsAllocator implements ShardsAllocator {
 
+    // Min difference in datastream shard count (heaviest − lightest node) before
+    // balance() moves shards. Higher = more imbalance tolerated, fewer relocations.
+    // Dynamic: changeable at runtime via PUT _cluster/settings without restart.
     public static final Setting<Float> THRESHOLD_SETTING = Setting.floatSetting(
         "cluster.routing.allocation.datastream_balance.threshold",
         1.0f,
@@ -35,10 +38,15 @@ public class DatastreamShardsAllocator implements ShardsAllocator {
         Setting.Property.Dynamic
     );
 
+    // volatile: the update consumer below writes from the cluster state thread,
+    // while allocate() reads from the allocation thread.
     private volatile float threshold;
 
     public DatastreamShardsAllocator(Settings settings, ClusterSettings clusterSettings) {
         this.threshold = THRESHOLD_SETTING.get(settings);
+        // Subscribe to runtime changes — when someone calls PUT _cluster/settings
+        // with a new threshold, this lambda fires on every node via cluster state
+        // replication and updates our in-memory value.
         clusterSettings.addSettingsUpdateConsumer(THRESHOLD_SETTING, value -> this.threshold = value);
     }
 
