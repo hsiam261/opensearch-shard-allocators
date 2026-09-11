@@ -224,12 +224,14 @@ public class DatastreamShardsAllocator implements ShardsAllocator {
 
             List<RoutingNode> nodes = getDataNodes(allocation);
             if (nodes.size() < 2) return;
-            nodes.sort(Comparator.comparingInt(RoutingNode::size));
+            nodes.sort(Comparator.comparingInt(node -> countNonDatastreamShards(node, metadata)));
 
             RoutingNode lightest = nodes.get(0);
             RoutingNode heaviest = nodes.get(nodes.size() - 1);
+            int lightCount = countNonDatastreamShards(lightest, metadata);
+            int heavyCount = countNonDatastreamShards(heaviest, metadata);
 
-            if (heaviest.size() - lightest.size() <= threshold) break;
+            if (heavyCount - lightCount <= threshold) break;
 
             List<ShardRouting> heaviestShards = new ArrayList<>();
             for (ShardRouting s : heaviest) {
@@ -245,7 +247,8 @@ public class DatastreamShardsAllocator implements ShardsAllocator {
 
                 for (int i = 0; i < nodes.size() - 1; i++) {
                     RoutingNode target = nodes.get(i);
-                    if (heaviest.size() - target.size() <= threshold) break;
+                    int targetCount = countNonDatastreamShards(target, metadata);
+                    if (heavyCount - targetCount <= threshold) break;
 
                     Decision allocateDecision = allocation.deciders().canAllocate(shard, target, allocation);
                     if (allocateDecision.type() == Decision.Type.YES) {
@@ -346,6 +349,16 @@ public class DatastreamShardsAllocator implements ShardsAllocator {
         for (ShardRouting shard : node) {
             String ds = resolveDatastream(shard.getIndexName(), metadata);
             if (datastreamName.equals(ds)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private int countNonDatastreamShards(RoutingNode node, Metadata metadata) {
+        int count = 0;
+        for (ShardRouting shard : node) {
+            if (resolveDatastream(shard.getIndexName(), metadata) == null) {
                 count++;
             }
         }
