@@ -306,8 +306,11 @@ public class DatastreamShardsAllocator implements ShardsAllocator {
         }
 
         if (bestNode != null) {
+            // yes(assignedNode, allocationId, nodeDecisions, reuseStore)
+            // null allocationId = fresh allocation, false = don't reuse on-disk store
             return AllocateUnassignedDecision.yes(bestNode.node(), null, nodeDecisions, false);
         }
+        // no(allocationStatus, nodeDecisions) — DECIDERS_NO means all nodes were rejected by deciders
         return AllocateUnassignedDecision.no(
             org.opensearch.cluster.routing.UnassignedInfo.AllocationStatus.DECIDERS_NO,
             nodeDecisions
