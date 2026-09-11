@@ -1,0 +1,37 @@
+plugins {
+    id 'java'
+}
+
+group = 'io.github.hsiam261'
+version = '1.0.0'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}
+
+ext {
+    opensearchVersion = '2.19.0'
+}
+
+repositories {
+    mavenCentral()
+    maven { url 'https://aws.oss.sonatype.org/content/repositories/releases/' }
+}
+
+dependencies {
+    compileOnly "org.opensearch:opensearch:${opensearchVersion}"
+
+    testImplementation "org.opensearch.test:framework:${opensearchVersion}"
+    testImplementation 'junit:junit:4.13.2'
+}
+
+task bundlePlugin(type: Zip) {
+    dependsOn jar
+    archiveFileName = "${rootProject.name}-${version}.zip"
+    destinationDirectory = layout.buildDirectory.dir('distributions')
+    from jar
+    from('src/main/plugin-metadata') {
+        include 'plugin-descriptor.properties'
+    }
+}

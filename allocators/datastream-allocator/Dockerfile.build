@@ -1,0 +1,8 @@
+FROM gradle:7.6-jdk11
+
+WORKDIR /build
+
+COPY build.gradle settings.gradle ./
+COPY src/ src/
+
+RUN gradle bundlePlugin --no-daemon
