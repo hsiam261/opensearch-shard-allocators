@@ -98,6 +98,8 @@ public class DatastreamShardsAllocator implements ShardsAllocator {
         }
     }
 
+    // Relocate STARTED shards that deciders say can no longer remain on their node.
+    // If no target accepts, the shard stays put — next reroute will retry.
     private void moveShards(RoutingAllocation allocation) {
         Metadata metadata = allocation.metadata();
 
@@ -120,6 +122,10 @@ public class DatastreamShardsAllocator implements ShardsAllocator {
                         if (target.nodeId().equals(node.nodeId())) continue;
                         Decision allocateDecision = allocation.deciders().canAllocate(shard, target, allocation);
                         if (allocateDecision.type() == Decision.Type.YES) {
+                            // relocateShard(shard, nodeId, expectedSize, changes):
+                            //   expectedSize — bytes, for disk threshold checks (-1 = unknown)
+                            //   changes      — observer that records the routing table mutation
+                            // Shard becomes RELOCATING on source + INITIALIZING on target.
                             allocation.routingNodes().relocateShard(
                                 shard, target.nodeId(),
                                 allocation.clusterInfo().getShardSize(shard, ShardRouting.UNAVAILABLE_EXPECTED_SHARD_SIZE),
