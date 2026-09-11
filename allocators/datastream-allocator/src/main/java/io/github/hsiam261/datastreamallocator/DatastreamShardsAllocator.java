@@ -399,7 +399,7 @@ public class DatastreamShardsAllocator implements ShardsAllocator {
         if (datastream != null) {
             candidates.sort(Comparator.comparingInt(node -> countDatastreamShards(node, datastream, metadata)));
         } else {
-            candidates.sort(Comparator.comparingInt(RoutingNode::size));
+            candidates.sort(Comparator.comparingInt(node -> countNonDatastreamShards(node, metadata)));
         }
         return candidates;
     }
