@@ -31,6 +31,35 @@ cluster.routing.allocation.type: datastream_balanced
 |---|---|---|
 | `cluster.routing.allocation.datastream_balance.threshold` | `1.0` | Minimum delta (heaviest - lightest) before rebalancing triggers |
 
+## Building
+
+The plugin builds inside Docker (no local Gradle/JDK required):
+
+```bash
+bash build.sh
+```
+
+This produces `build/distributions/datastream-allocator-1.0.0.zip`, which can be installed with:
+
+```bash
+opensearch-plugin install --batch file:///path/to/datastream-allocator-1.0.0.zip
+```
+
+## Testing
+
+Integration tests run against a 3-node OpenSearch cluster in Docker with the plugin installed. Prerequisites: `docker`, `curl`, `jq`.
+
+```bash
+bash tests/run-tests.sh
+```
+
+This builds the plugin (if needed), starts the cluster, runs all tests, and tears down the cluster on exit. Pass `--no-teardown` to keep the cluster running after tests for debugging.
+
+The test suite covers:
+
+- **Test 1 — Basic shard placement**: Creates two datastreams and rolls over repeatedly, verifying `ceil(S/N)` balance after each rollover.
+- **Test 2 — Recovery from imbalanced state**: Forces all primaries to one node and all replicas to another, then re-enables rebalancing and verifies the allocator recovers to a balanced distribution. Also verifies that a new datastream balances independently.
+
 ## Full Spec
 
 See [SPEC.md](SPEC.md) for the complete design, implementation plan, edge case analysis, and Docker test plan.
