@@ -330,14 +330,21 @@ public class DatastreamShardsAllocator implements ShardsAllocator {
         String datastream = resolveDatastream(shard.getIndexName(), metadata);
         List<RoutingNode> candidates = sortedCandidates(allocation, datastream, metadata);
         List<NodeAllocationResult> nodeDecisions = new ArrayList<>();
+        RoutingNode bestNode = null;
         int rank = 0;
 
         for (RoutingNode target : candidates) {
             if (target.nodeId().equals(currentNode.nodeId())) continue;
             Decision allocateDecision = allocation.deciders().canAllocate(shard, target, allocation);
             nodeDecisions.add(new NodeAllocationResult(target.node(), allocateDecision, ++rank));
+            if (bestNode == null && allocateDecision.type() == Decision.Type.YES) {
+                bestNode = target;
+            }
         }
 
+        if (bestNode != null) {
+            return MoveDecision.cannotRemain(canRemain, AllocationDecision.YES, bestNode.node(), nodeDecisions);
+        }
         return MoveDecision.cannotRemain(canRemain, AllocationDecision.NO, null, nodeDecisions);
     }
 
