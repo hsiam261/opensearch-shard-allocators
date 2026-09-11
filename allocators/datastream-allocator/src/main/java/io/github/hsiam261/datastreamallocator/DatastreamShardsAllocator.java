@@ -171,12 +171,7 @@ public class DatastreamShardsAllocator implements ShardsAllocator {
         while (moved) {
             moved = false;
 
-            List<RoutingNode> nodes = new ArrayList<>();
-            for (RoutingNode node : allocation.routingNodes()) {
-                if (node.node().isDataNode()) {
-                    nodes.add(node);
-                }
-            }
+            List<RoutingNode> nodes = getDataNodes(allocation);
             if (nodes.size() < 2) return;
             nodes.sort(Comparator.comparingInt(n -> countDatastreamShards(n, datastream, metadata)));
 
@@ -227,12 +222,7 @@ public class DatastreamShardsAllocator implements ShardsAllocator {
         while (moved) {
             moved = false;
 
-            List<RoutingNode> nodes = new ArrayList<>();
-            for (RoutingNode node : allocation.routingNodes()) {
-                if (node.node().isDataNode()) {
-                    nodes.add(node);
-                }
-            }
+            List<RoutingNode> nodes = getDataNodes(allocation);
             if (nodes.size() < 2) return;
             nodes.sort(Comparator.comparingInt(RoutingNode::size));
 
@@ -373,11 +363,18 @@ public class DatastreamShardsAllocator implements ShardsAllocator {
         );
     }
 
-    private List<RoutingNode> sortedCandidates(RoutingAllocation allocation, String datastream, Metadata metadata) {
-        List<RoutingNode> candidates = new ArrayList<>();
+    private List<RoutingNode> getDataNodes(RoutingAllocation allocation) {
+        List<RoutingNode> dataNodes = new ArrayList<>();
         for (RoutingNode node : allocation.routingNodes()) {
-            candidates.add(node);
+            if (node.node().isDataNode()) {
+                dataNodes.add(node);
+            }
         }
+        return dataNodes;
+    }
+
+    private List<RoutingNode> sortedCandidates(RoutingAllocation allocation, String datastream, Metadata metadata) {
+        List<RoutingNode> candidates = getDataNodes(allocation);
 
         if (datastream != null) {
             candidates.sort(Comparator.comparingInt(n -> countDatastreamShards(n, datastream, metadata)));
