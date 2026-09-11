@@ -266,9 +266,13 @@ public class DatastreamShardsAllocator implements ShardsAllocator {
         }
     }
 
+    // Explain API hook: called by GET /_cluster/allocation/explain to report
+    // why a shard is placed where it is or why it can't be allocated/moved.
     @Override
     public ShardAllocationDecision decideShardAllocation(ShardRouting shard, RoutingAllocation allocation) {
         if (shard.unassigned()) {
+            // ShardAllocationDecision takes (AllocateUnassignedDecision, MoveDecision).
+            // Only one applies at a time; the other is NOT_TAKEN.
             return new ShardAllocationDecision(
                 decideAllocateUnassigned(shard, allocation),
                 MoveDecision.NOT_TAKEN
