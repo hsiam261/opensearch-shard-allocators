@@ -140,12 +140,18 @@ public class DatastreamShardsAllocator implements ShardsAllocator {
     }
 
     private void balance(RoutingAllocation allocation) {
+        // Global gate: is rebalancing allowed at all right now?
+        // Returns NO when cluster.routing.rebalance.enable is "none", cluster is
+        // still recovering, etc. Per-shard checks happen later in rebalanceDatastream().
         if (allocation.deciders().canRebalance(allocation).type() != Decision.Type.YES) {
             return;
         }
 
         Metadata metadata = allocation.metadata();
 
+        // getIndicesLookup() has all abstractions (indices, aliases, data streams).
+        // Filter for DATA_STREAM to get datastream names ("logs"), not backing
+        // indices (".ds-logs-000001") which have type CONCRETE_INDEX.
         Set<String> datastreams = new HashSet<>();
         for (Map.Entry<String, IndexAbstraction> entry : metadata.getIndicesLookup().entrySet()) {
             if (entry.getValue().getType() == IndexAbstraction.Type.DATA_STREAM) {
@@ -167,8 +173,11 @@ public class DatastreamShardsAllocator implements ShardsAllocator {
 
             List<RoutingNode> nodes = new ArrayList<>();
             for (RoutingNode node : allocation.routingNodes()) {
-                nodes.add(node);
+                if (node.node().isDataNode()) {
+                    nodes.add(node);
+                }
             }
+            if (nodes.size() < 2) return;
             nodes.sort(Comparator.comparingInt(n -> countDatastreamShards(n, datastream, metadata)));
 
             RoutingNode lightest = nodes.get(0);
@@ -200,7 +209,9 @@ public class DatastreamShardsAllocator implements ShardsAllocator {
                     Decision allocateDecision = allocation.deciders().canAllocate(shard, target, allocation);
                     if (allocateDecision.type() == Decision.Type.YES) {
                         allocation.routingNodes().relocateShard(
-                            shard, target.nodeId(), 0L, allocation.changes()
+                            shard, target.nodeId(),
+                            allocation.clusterInfo().getShardSize(shard, ShardRouting.UNAVAILABLE_EXPECTED_SHARD_SIZE),
+                            allocation.changes()
                         );
                         moved = true;
                         break;
@@ -218,8 +229,11 @@ public class DatastreamShardsAllocator implements ShardsAllocator {
 
             List<RoutingNode> nodes = new ArrayList<>();
             for (RoutingNode node : allocation.routingNodes()) {
-                nodes.add(node);
+                if (node.node().isDataNode()) {
+                    nodes.add(node);
+                }
             }
+            if (nodes.size() < 2) return;
             nodes.sort(Comparator.comparingInt(RoutingNode::size));
 
             RoutingNode lightest = nodes.get(0);
@@ -246,7 +260,9 @@ public class DatastreamShardsAllocator implements ShardsAllocator {
                     Decision allocateDecision = allocation.deciders().canAllocate(shard, target, allocation);
                     if (allocateDecision.type() == Decision.Type.YES) {
                         allocation.routingNodes().relocateShard(
-                            shard, target.nodeId(), 0L, allocation.changes()
+                            shard, target.nodeId(),
+                            allocation.clusterInfo().getShardSize(shard, ShardRouting.UNAVAILABLE_EXPECTED_SHARD_SIZE),
+                            allocation.changes()
                         );
                         moved = true;
                         break;
