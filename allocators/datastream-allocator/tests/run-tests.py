@@ -60,7 +60,7 @@ def os_request(path: str, method: str = "GET", data: Any | None = None) -> Any |
     try:
         with urllib.request.urlopen(req) as resp:
             return json.loads(resp.read().decode())
-    except urllib.error.URLError:
+    except (urllib.error.URLError, ConnectionError):
         return None
     except json.JSONDecodeError:
         return None
@@ -71,7 +71,7 @@ def os_request_text(path: str) -> str:
     try:
         with urllib.request.urlopen(url) as resp:
             return resp.read().decode()
-    except urllib.error.URLError:
+    except (urllib.error.URLError, ConnectionError):
         return ""
 
 
