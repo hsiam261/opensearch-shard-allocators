@@ -60,6 +60,11 @@ def os_request(path: str, method: str = "GET", data: Any | None = None) -> Any |
     try:
         with urllib.request.urlopen(req) as resp:
             return json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        try:
+            return json.loads(e.read().decode())
+        except (json.JSONDecodeError, Exception):
+            return None
     except (urllib.error.URLError, ConnectionError):
         return None
     except json.JSONDecodeError:
@@ -81,6 +86,7 @@ def os_request_text(path: str) -> str:
 
 
 def wait_green(timeout: int = 120) -> bool:
+    health = None
     for _ in range(timeout):
         health = os_request("_cluster/health")
         if health and health.get("status") == "green":
@@ -140,6 +146,10 @@ def print_distribution(pattern: str, label: str) -> None:
 # floor(total_shards / node_count) and ceil(total_shards / node_count). Fails if any shards are unassigned.
 def check_ds_balance(pattern: str, label: str) -> None:
     node_count = len(get_all_nodes())
+    if node_count == 0:
+        fail_test(f"{label} — no nodes found")
+        return
+
     shards = get_shards(pattern)
     total_shards = len(shards)
 
@@ -168,20 +178,21 @@ def check_ds_balance(pattern: str, label: str) -> None:
 
 
 # Check that new shards were placed on the least-loaded nodes from prev_dist.
+# No skipped node should have had strictly fewer shards than any gained node.
 def check_placement(prev_dist: dict[str, int], new_dist: dict[str, int], label: str) -> None:
-    gained = [node for node in new_dist if new_dist[node] > prev_dist.get(node, 0)]
+    gained = set(node for node in new_dist if new_dist[node] > prev_dist.get(node, 0))
+    max_prev_gained = max(prev_dist.get(n, 0) for n in gained)
 
     info(f"After {label}: {new_dist}")
     ok = True
-    for node in gained:
-        fewer = sum(1 for n in prev_dist if prev_dist[n] < prev_dist[node])
-        if fewer >= len(gained):
+    for node in prev_dist:
+        if node not in gained and prev_dist[node] < max_prev_gained:
             ok = False
 
     if ok:
-        pass_test(f"{label} — new shards went to least-loaded nodes {gained}")
+        pass_test(f"{label} — new shards went to least-loaded nodes {sorted(gained)}")
     else:
-        fail_test(f"{label} — new shards went to {gained}, prev was {prev_dist}")
+        fail_test(f"{label} — new shards went to {sorted(gained)}, prev was {prev_dist}")
 
 
 def get_shard_node(index: str, shard: int, prirep: str) -> str | None:
@@ -377,10 +388,9 @@ def main() -> None:
                         help="Leave the cluster running after tests")
     args = parser.parse_args()
 
-    for cmd in ["docker"]:
-        if not shutil.which(cmd):
-            print(f"Error: {cmd} is required but not installed")
-            sys.exit(1)
+    if not shutil.which("docker"):
+        print("Error: docker is required but not installed")
+        sys.exit(1)
 
     plugin_zip = os.path.join(PROJECT_DIR, "build", "distributions", "datastream-allocator-1.0.0.zip")
     if not os.path.isfile(plugin_zip):
