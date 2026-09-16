@@ -47,10 +47,10 @@ opensearch-plugin install --batch file:///path/to/datastream-allocator-1.0.0.zip
 
 ## Testing
 
-Integration tests run against a 3-node OpenSearch cluster in Docker with the plugin installed. Prerequisites: `docker`, `curl`, `jq`.
+Integration tests run against a 3-node OpenSearch cluster in Docker with the plugin installed. Prerequisites: `docker`, `python3`.
 
 ```bash
-bash tests/run-tests.sh
+python3 tests/run-tests.py
 ```
 
 This builds the plugin (if needed), starts the cluster, runs all tests, and tears down the cluster on exit. Pass `--no-teardown` to keep the cluster running after tests for debugging.
