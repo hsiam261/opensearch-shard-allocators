@@ -177,22 +177,44 @@ def check_ds_balance(pattern: str, label: str) -> None:
     print_distribution(pattern, "distribution")
 
 
-# Check that new shards were placed on the least-loaded nodes from prev_dist.
-# No skipped node should have had strictly fewer shards than any gained node.
-def check_placement(prev_dist: dict[str, int], new_dist: dict[str, int], label: str) -> None:
+# Check placement: per-datastream balance is the primary criterion, total shard count breaks ties.
+# 1. No skipped node should have had strictly fewer per-datastream shards than any gained node.
+# 2. Among nodes tied in per-datastream count, gained nodes should not have had more total shards
+#    than any skipped node.
+def check_placement(prev_dist: dict[str, int], new_dist: dict[str, int],
+                    prev_total: dict[str, int], label: str) -> None:
     gained = set(node for node in new_dist if new_dist[node] > prev_dist.get(node, 0))
     max_prev_gained = max(prev_dist.get(n, 0) for n in gained)
 
-    info(f"After {label}: {new_dist}")
+    info(f"After {label}: ds={new_dist}")
     ok = True
+    reason = ""
+
+    # No node with fewer per-datastream shards than the most-loaded gained node should be skipped
     for node in prev_dist:
         if node not in gained and prev_dist[node] < max_prev_gained:
             ok = False
+            reason = (f"skipped {node} (ds={prev_dist[node]}) had fewer per-datastream "
+                      f"shards than gained max (ds={max_prev_gained})")
 
     if ok:
-        pass_test(f"{label} — new shards went to least-loaded nodes {sorted(gained)}")
+        max_total_gained = max(prev_total.get(n, 0) for n in gained)
+
+        # Since the above passed, all skipped nodes have per-datastream shards >= max_prev_gained.
+        # The only remaining error is a wrong tiebreak: skipping a node with the same per-datastream
+        # count but fewer total shards than a gained node.
+        for node in prev_dist:
+            if (node not in gained
+                    and prev_dist[node] == max_prev_gained
+                    and prev_total.get(node, 0) < max_total_gained):
+                ok = False
+                reason = (f"skipped {node} (total={prev_total[node]}) had fewer total shards "
+                          f"than gained node (total={max_total_gained}) at same ds count")
+
+    if ok:
+        pass_test(f"{label} — placement correct {sorted(gained)}")
     else:
-        fail_test(f"{label} — new shards went to {sorted(gained)}, prev was {prev_dist}")
+        fail_test(f"{label} — {reason}")
 
 
 def get_shard_node(index: str, shard: int, prirep: str) -> str | None:
@@ -361,19 +383,21 @@ def test_2() -> None:
     print()
     create_ds_template("audit")
 
-    prev_dist = shard_distribution(".ds-*")
+    prev_dist = shard_distribution(".ds-audit-*")
+    prev_total = shard_distribution(".ds-*")
 
     create_datastream("audit")
     time.sleep(3)
     wait_green()
-    check_placement(prev_dist, shard_distribution(".ds-*"), "create")
+    check_placement(prev_dist, shard_distribution(".ds-audit-*"), prev_total, "create")
 
     for i in range(1, 11):
-        prev_dist = shard_distribution(".ds-*")
+        prev_dist = shard_distribution(".ds-audit-*")
+        prev_total = shard_distribution(".ds-*")
         rollover_ds("audit")
         time.sleep(3)
         wait_green()
-        check_placement(prev_dist, shard_distribution(".ds-*"), f"rollover {i}")
+        check_placement(prev_dist, shard_distribution(".ds-audit-*"), prev_total, f"rollover {i}")
     print()
 
 
