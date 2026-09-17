@@ -482,8 +482,9 @@ def main() -> None:
         f"datastream-allocator-1.0.0-opensearch-{os_version}.zip",
     )
     if not os.path.isfile(plugin_zip):
-        log(f"Building plugin for OpenSearch {os_version}...")
-        subprocess.run(["bash", "build.sh", os_version], cwd=PROJECT_DIR, check=True)
+        print(f"Error: plugin not found at {plugin_zip}")
+        print(f"Build it first: ./build.sh {os_version}")
+        sys.exit(1)
 
     env = {**os.environ, "OPENSEARCH_VERSION": os_version}
 
