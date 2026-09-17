@@ -173,7 +173,8 @@ public class DatastreamShardsAllocator implements ShardsAllocator {
 
             List<RoutingNode> nodes = getDataNodes(allocation);
             if (nodes.size() < 2) return;
-            nodes.sort(Comparator.comparingInt(node -> countDatastreamShards(node, datastream, metadata)));
+            nodes.sort(Comparator.comparingInt((RoutingNode node) -> countDatastreamShards(node, datastream, metadata))
+                .thenComparingInt(RoutingNode::size));
 
             RoutingNode lightest = nodes.get(0);
             RoutingNode heaviest = nodes.get(nodes.size() - 1);
@@ -224,7 +225,8 @@ public class DatastreamShardsAllocator implements ShardsAllocator {
 
             List<RoutingNode> nodes = getDataNodes(allocation);
             if (nodes.size() < 2) return;
-            nodes.sort(Comparator.comparingInt(node -> countNonDatastreamShards(node, metadata)));
+            nodes.sort(Comparator.comparingInt((RoutingNode node) -> countNonDatastreamShards(node, metadata))
+                .thenComparingInt(RoutingNode::size));
 
             RoutingNode lightest = nodes.get(0);
             RoutingNode heaviest = nodes.get(nodes.size() - 1);
@@ -404,9 +406,11 @@ public class DatastreamShardsAllocator implements ShardsAllocator {
         List<RoutingNode> candidates = getDataNodes(allocation);
 
         if (datastream != null) {
-            candidates.sort(Comparator.comparingInt(node -> countDatastreamShards(node, datastream, metadata)));
+            candidates.sort(Comparator.comparingInt((RoutingNode node) -> countDatastreamShards(node, datastream, metadata))
+                .thenComparingInt(RoutingNode::size));
         } else {
-            candidates.sort(Comparator.comparingInt(node -> countNonDatastreamShards(node, metadata)));
+            candidates.sort(Comparator.comparingInt((RoutingNode node) -> countNonDatastreamShards(node, metadata))
+                .thenComparingInt(RoutingNode::size));
         }
         return candidates;
     }
