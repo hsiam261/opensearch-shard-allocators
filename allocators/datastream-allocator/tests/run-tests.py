@@ -71,14 +71,6 @@ def os_request(path: str, method: str = "GET", data: Any | None = None) -> Any |
         return None
 
 
-def os_request_text(path: str) -> str:
-    url = f"{OS_URL}/{path.lstrip('/')}"
-    try:
-        with urllib.request.urlopen(url) as resp:
-            return resp.read().decode()
-    except (urllib.error.URLError, ConnectionError):
-        return ""
-
 
 ###############################################################################
 # Helpers
@@ -436,9 +428,10 @@ def main() -> None:
     wait_green(180)
 
     info("Cluster is green. Node list:")
-    nodes = os_request_text("_cat/nodes?v&h=name,node.role")
-    for line in nodes.splitlines():
-        print(f"    {line}")
+    nodes = os_request("_cat/nodes?format=json&h=name,node.role")
+    if nodes:
+        for n in nodes:
+            print(f"    {n['name']}  {n.get('node.role', '')}")
     print()
 
     test_1()
