@@ -52,7 +52,7 @@ def ceil_div(a: int, b: int) -> int:
     return math.ceil(a / b)
 
 
-def os_request(path: str, method: str = "GET", data: Any | None = None) -> Any | None:
+def os_request(path: str, method: str = "GET", data: Any = None) -> Any:
     url = f"{OS_URL}/{path.lstrip('/')}"
     body = json.dumps(data).encode() if data is not None else None
     headers = {"Content-Type": "application/json"} if body else {}
@@ -176,6 +176,11 @@ def check_ds_balance(pattern: str, label: str) -> None:
 def check_placement(prev_dist: dict[str, int], new_dist: dict[str, int],
                     prev_total: dict[str, int], label: str) -> None:
     gained = set(node for node in new_dist if new_dist[node] > prev_dist.get(node, 0))
+
+    if not gained:
+        fail_test(f"{label} — no nodes gained shards")
+        return
+
     max_prev_gained = max(prev_dist.get(n, 0) for n in gained)
 
     info(f"After {label}: ds={new_dist}")
@@ -188,6 +193,7 @@ def check_placement(prev_dist: dict[str, int], new_dist: dict[str, int],
             ok = False
             reason = (f"skipped {node} (ds={prev_dist[node]}) had fewer per-datastream "
                       f"shards than gained max (ds={max_prev_gained})")
+            break
 
     if ok:
         max_total_gained = max(prev_total.get(n, 0) for n in gained)
@@ -202,6 +208,7 @@ def check_placement(prev_dist: dict[str, int], new_dist: dict[str, int],
                 ok = False
                 reason = (f"skipped {node} (total={prev_total[node]}) had fewer total shards "
                           f"than gained node (total={max_total_gained}) at same ds count")
+                break
 
     if ok:
         pass_test(f"{label} — placement correct {sorted(gained)}")
@@ -237,8 +244,8 @@ def move_shard(index: str, shard: int, from_node: str, to_node: str) -> None:
     wait_no_relocating()
 
 
-def create_ds_template(name: str) -> None:
-    os_request(f"_index_template/{name}-template", method="PUT", data={
+def create_ds_template(name: str) -> Any:
+    return os_request(f"_index_template/{name}-template", method="PUT", data={
         "index_patterns": [name],
         "data_stream": {},
         "template": {
@@ -247,20 +254,21 @@ def create_ds_template(name: str) -> None:
     })
 
 
-def create_datastream(name: str) -> None:
-    os_request(f"{name}/_doc", method="POST", data={
+def create_datastream(name: str) -> Any:
+    return os_request(f"{name}/_doc", method="POST", data={
         "@timestamp": "2024-01-01T00:00:00",
         "message": "init"
     })
 
 
-def rollover_ds(name: str) -> None:
-    os_request(f"{name}/_rollover", method="POST")
+def rollover_ds(name: str) -> Any:
+    return os_request(f"{name}/_rollover", method="POST")
 
 
-def delete_datastream(name: str) -> None:
-    os_request(f"_data_stream/{name}", method="DELETE")
-    os_request(f"_index_template/{name}-template", method="DELETE")
+def delete_datastream(name: str) -> tuple[Any, Any]:
+    ds = os_request(f"_data_stream/{name}", method="DELETE")
+    tpl = os_request(f"_index_template/{name}-template", method="DELETE")
+    return ds, tpl
 
 
 ###############################################################################
@@ -277,10 +285,17 @@ def test_1() -> None:
         "persistent": {"cluster.routing.rebalance.enable": "none"}
     })
 
-    create_ds_template("logs")
-    create_ds_template("metrics")
-    create_datastream("logs")
-    create_datastream("metrics")
+    for ds in ["logs", "metrics"]:
+        result = create_ds_template(ds)
+        if not result or not result.get("acknowledged"):
+            fail_test(f"failed to create {ds} template: {result}")
+            return
+
+    for ds in ["logs", "metrics"]:
+        result = create_datastream(ds)
+        if not result or "error" in result:
+            fail_test(f"failed to create {ds} datastream: {result}")
+            return
     time.sleep(3)
     wait_green()
 
@@ -290,14 +305,20 @@ def test_1() -> None:
     print()
 
     for i in range(1, 6):
-        rollover_ds("logs")
+        result = rollover_ds("logs")
+        if not result or not result.get("rolled_over"):
+            fail_test(f"failed to rollover logs (rollover {i}): {result}")
+            return
         time.sleep(3)
         wait_green()
         check_ds_balance(".ds-logs-*", f"logs after rollover {i}")
     print()
 
     for i in range(1, 6):
-        rollover_ds("metrics")
+        result = rollover_ds("metrics")
+        if not result or not result.get("rolled_over"):
+            fail_test(f"failed to rollover metrics (rollover {i}): {result}")
+            return
         time.sleep(3)
         wait_green()
         check_ds_balance(".ds-metrics-*", f"metrics after rollover {i}")
@@ -323,11 +344,21 @@ def test_2() -> None:
         "persistent": {"cluster.routing.rebalance.enable": "none"}
     })
 
-    create_ds_template("events")
-    create_datastream("events")
+    result = create_ds_template("events")
+    if not result or not result.get("acknowledged"):
+        fail_test(f"failed to create events template: {result}")
+        return
+
+    result = create_datastream("events")
+    if not result or "error" in result:
+        fail_test(f"failed to create events datastream: {result}")
+        return
 
     for _ in range(5):
-        rollover_ds("events")
+        result = rollover_ds("events")
+        if not result or not result.get("rolled_over"):
+            fail_test(f"failed to rollover events: {result}")
+            return
         time.sleep(2)
     time.sleep(3)
     wait_green()
@@ -344,6 +375,10 @@ def test_2() -> None:
         primary_node = get_shard_node(index, 0, "p")
         replica_node = get_shard_node(index, 0, "r")
 
+        if primary_node is None or replica_node is None:
+            print(f"{RED}ERROR: could not find STARTED shards for {index}{NC}")
+            sys.exit(1)
+
         if primary_node != "node1":
             if primary_node == "node2":
                 replica_target = "node3"
@@ -356,6 +391,10 @@ def test_2() -> None:
             move_shard(index, 0, primary_node, "node1")
 
         replica_node = get_shard_node(index, 0, "r")
+        if replica_node is None:
+            print(f"{RED}ERROR: could not find STARTED replica for {index}{NC}")
+            sys.exit(1)
+
         if replica_node != "node2":
             move_shard(index, 0, replica_node, "node2")
 
@@ -373,12 +412,18 @@ def test_2() -> None:
     info("Creating new datastream 'audit' on imbalanced cluster (rebalancing still disabled)...")
     info("Each rollover adds 2 shards (primary+replica) — they should go to the two least-loaded nodes.")
     print()
-    create_ds_template("audit")
+    result = create_ds_template("audit")
+    if not result or not result.get("acknowledged"):
+        fail_test(f"failed to create audit template: {result}")
+        return
 
     prev_dist = shard_distribution(".ds-audit-*")
     prev_total = shard_distribution(".ds-*")
 
-    create_datastream("audit")
+    result = create_datastream("audit")
+    if not result or "error" in result:
+        fail_test(f"failed to create audit datastream: {result}")
+        return
     time.sleep(3)
     wait_green()
     check_placement(prev_dist, shard_distribution(".ds-audit-*"), prev_total, "create")
@@ -386,7 +431,10 @@ def test_2() -> None:
     for i in range(1, 11):
         prev_dist = shard_distribution(".ds-audit-*")
         prev_total = shard_distribution(".ds-*")
-        rollover_ds("audit")
+        result = rollover_ds("audit")
+        if not result or not result.get("rolled_over"):
+            fail_test(f"failed to rollover audit (rollover {i}): {result}")
+            return
         time.sleep(3)
         wait_green()
         check_placement(prev_dist, shard_distribution(".ds-audit-*"), prev_total, f"rollover {i}")
@@ -425,7 +473,9 @@ def main() -> None:
         log("Teardown disabled (--no-teardown). Cluster will remain running.")
 
     log("Waiting for cluster to be green...")
-    wait_green(180)
+    if not wait_green(180):
+        print(f"{RED}ERROR: cluster did not reach green status{NC}")
+        sys.exit(1)
 
     info("Cluster is green. Node list:")
     nodes = os_request("_cat/nodes?format=json&h=name,node.role")
@@ -437,8 +487,12 @@ def main() -> None:
     test_1()
 
     log("Cleaning up test 1...")
-    delete_datastream("logs")
-    delete_datastream("metrics")
+    for ds in ["logs", "metrics"]:
+        ds_result, tpl_result = delete_datastream(ds)
+        if not ds_result or not ds_result.get("acknowledged"):
+            print(f"{RED}WARNING: failed to delete datastream {ds}: {ds_result}{NC}")
+        if not tpl_result or not tpl_result.get("acknowledged"):
+            print(f"{RED}WARNING: failed to delete template {ds}: {tpl_result}{NC}")
     time.sleep(5)
     wait_green()
     print()
