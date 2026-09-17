@@ -3,11 +3,14 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
+OPENSEARCH_VERSION="${1:-2.19.0}"
 IMAGE_NAME="datastream-allocator-builder"
 CONTAINER_NAME="datastream-allocator-build"
 
-echo "Building in Docker (rootless)..."
-docker build -f Dockerfile.build -t "$IMAGE_NAME" .
+echo "Building for OpenSearch ${OPENSEARCH_VERSION} in Docker (rootless)..."
+docker build -f Dockerfile.build \
+    --build-arg OPENSEARCH_VERSION="$OPENSEARCH_VERSION" \
+    -t "$IMAGE_NAME" .
 
 echo "Extracting artifacts..."
 docker create --name "$CONTAINER_NAME" "$IMAGE_NAME"
