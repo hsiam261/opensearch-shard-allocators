@@ -281,9 +281,12 @@ def test_1() -> None:
     print()
 
     info("Disabling rebalancing...")
-    os_request("_cluster/settings", method="PUT", data={
+    result = os_request("_cluster/settings", method="PUT", data={
         "persistent": {"cluster.routing.rebalance.enable": "none"}
     })
+    if not result or not result.get("acknowledged"):
+        fail_test(f"failed to disable rebalancing: {result}")
+        return
 
     for ds in ["logs", "metrics"]:
         result = create_ds_template(ds)
@@ -297,7 +300,9 @@ def test_1() -> None:
             fail_test(f"failed to create {ds} datastream: {result}")
             return
     time.sleep(3)
-    wait_green()
+    if not wait_green():
+        fail_test("cluster not green after creating datastreams")
+        return
 
     info("Initial state (1 backing index each, 2 shards each):")
     check_ds_balance(".ds-logs-*", "logs initial")
@@ -310,7 +315,9 @@ def test_1() -> None:
             fail_test(f"failed to rollover logs (rollover {i}): {result}")
             return
         time.sleep(3)
-        wait_green()
+        if not wait_green():
+            fail_test(f"cluster not green after logs rollover {i}")
+            return
         check_ds_balance(".ds-logs-*", f"logs after rollover {i}")
     print()
 
@@ -320,7 +327,9 @@ def test_1() -> None:
             fail_test(f"failed to rollover metrics (rollover {i}): {result}")
             return
         time.sleep(3)
-        wait_green()
+        if not wait_green():
+            fail_test(f"cluster not green after metrics rollover {i}")
+            return
         check_ds_balance(".ds-metrics-*", f"metrics after rollover {i}")
     print()
 
@@ -340,9 +349,12 @@ def test_2() -> None:
     print()
 
     info("Disabling rebalancing...")
-    os_request("_cluster/settings", method="PUT", data={
+    result = os_request("_cluster/settings", method="PUT", data={
         "persistent": {"cluster.routing.rebalance.enable": "none"}
     })
+    if not result or not result.get("acknowledged"):
+        fail_test(f"failed to disable rebalancing: {result}")
+        return
 
     result = create_ds_template("events")
     if not result or not result.get("acknowledged"):
@@ -361,7 +373,9 @@ def test_2() -> None:
             return
         time.sleep(2)
     time.sleep(3)
-    wait_green()
+    if not wait_green():
+        fail_test("cluster not green after events setup")
+        return
 
     info("Initial placement (rebalancing disabled, 6 backing indices, 12 shards):")
     print_distribution(".ds-events-*", "events before force-move")
@@ -425,7 +439,9 @@ def test_2() -> None:
         fail_test(f"failed to create audit datastream: {result}")
         return
     time.sleep(3)
-    wait_green()
+    if not wait_green():
+        fail_test("cluster not green after creating audit datastream")
+        return
     check_placement(prev_dist, shard_distribution(".ds-audit-*"), prev_total, "create")
 
     for i in range(1, 11):
@@ -436,7 +452,9 @@ def test_2() -> None:
             fail_test(f"failed to rollover audit (rollover {i}): {result}")
             return
         time.sleep(3)
-        wait_green()
+        if not wait_green():
+            fail_test(f"cluster not green after audit rollover {i}")
+            return
         check_placement(prev_dist, shard_distribution(".ds-audit-*"), prev_total, f"rollover {i}")
     print()
 
@@ -494,7 +512,8 @@ def main() -> None:
         if not tpl_result or not tpl_result.get("acknowledged"):
             print(f"{RED}WARNING: failed to delete template {ds}: {tpl_result}{NC}")
     time.sleep(5)
-    wait_green()
+    if not wait_green():
+        print(f"{RED}WARNING: cluster not green after cleanup{NC}")
     print()
 
     test_2()
