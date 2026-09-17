@@ -468,24 +468,35 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Integration tests for datastream allocator")
     parser.add_argument("--no-teardown", action="store_true",
                         help="Leave the cluster running after tests")
+    parser.add_argument("--opensearch-version", default="2.19.0",
+                        help="OpenSearch version to test against (default: 2.19.0)")
     args = parser.parse_args()
 
     if not shutil.which("docker"):
         print("Error: docker is required but not installed")
         sys.exit(1)
 
-    plugin_zip = os.path.join(PROJECT_DIR, "build", "distributions", "datastream-allocator-1.0.0.zip")
+    os_version = args.opensearch_version
+    plugin_zip = os.path.join(
+        PROJECT_DIR, "build", "distributions",
+        f"datastream-allocator-1.0.0-opensearch-{os_version}.zip",
+    )
     if not os.path.isfile(plugin_zip):
-        log("Building plugin...")
-        subprocess.run(["bash", "build.sh"], cwd=PROJECT_DIR, check=True)
+        log(f"Building plugin for OpenSearch {os_version}...")
+        subprocess.run(["bash", "build.sh", os_version], cwd=PROJECT_DIR, check=True)
 
-    log("Starting 3-node OpenSearch cluster...")
-    subprocess.run(["docker", "compose", "-f", COMPOSE_FILE, "up", "-d", "--build"], check=True)
+    env = {**os.environ, "OPENSEARCH_VERSION": os_version}
+
+    log(f"Starting 3-node OpenSearch {os_version} cluster...")
+    subprocess.run(
+        ["docker", "compose", "-f", COMPOSE_FILE, "up", "-d", "--build"],
+        env=env, check=True,
+    )
 
     if not args.no_teardown:
         def cleanup():
             log("Tearing down cluster...")
-            subprocess.run(["docker", "compose", "-f", COMPOSE_FILE, "down", "-v"])
+            subprocess.run(["docker", "compose", "-f", COMPOSE_FILE, "down", "-v"], env=env)
         atexit.register(cleanup)
     else:
         log("Teardown disabled (--no-teardown). Cluster will remain running.")
