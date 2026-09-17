@@ -33,27 +33,42 @@ cluster.routing.allocation.type: datastream_balanced
 
 ## Building
 
-The plugin builds inside Docker (no local Gradle/JDK required):
+The plugin builds inside Docker (no local Gradle/JDK required). Pass the target OpenSearch version as the first argument (defaults to `2.19.0`):
 
 ```bash
-bash build.sh
+bash build.sh <opensearch-version>
 ```
 
-This produces `build/distributions/datastream-allocator-1.0.0.zip`, which can be installed with:
+For example:
 
 ```bash
-opensearch-plugin install --batch file:///path/to/datastream-allocator-1.0.0.zip
+bash build.sh 2.19.0
 ```
+
+This produces `build/distributions/datastream-allocator-1.0.0-opensearch-2.19.0.zip`, which can be installed with:
+
+```bash
+opensearch-plugin install --batch file:///path/to/datastream-allocator-1.0.0-opensearch-2.19.0.zip
+```
+
+Supported OpenSearch versions: 2.13–2.19.
 
 ## Testing
 
 Integration tests run against a 3-node OpenSearch cluster in Docker with the plugin installed. Prerequisites: `docker`, `python3`.
 
+Build the plugin first, then run the tests:
+
 ```bash
-python3 tests/run-tests.py
+bash build.sh 2.19.0
+python3 tests/run-tests.py --opensearch-version 2.19.0
 ```
 
-This builds the plugin (if needed), starts the cluster, runs all tests, and tears down the cluster on exit. Pass `--no-teardown` to keep the cluster running after tests for debugging.
+| Flag | Description |
+|---|---|
+| `--opensearch-version` | **(required)** OpenSearch version to test against |
+| `--plugin-version` | Plugin version (default: `1.0.0`) |
+| `--no-teardown` | Keep the cluster running after tests for debugging |
 
 The test suite covers:
 
