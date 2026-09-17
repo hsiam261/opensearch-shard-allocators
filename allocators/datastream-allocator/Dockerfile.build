@@ -1,8 +1,10 @@
 FROM gradle:7.6-jdk11
 
+ARG OPENSEARCH_VERSION=2.19.0
+
 WORKDIR /build
 
 COPY build.gradle settings.gradle ./
 COPY src/ src/
 
-RUN gradle bundlePlugin --no-daemon
+RUN gradle bundlePlugin -PopensearchVersion=${OPENSEARCH_VERSION} --no-daemon

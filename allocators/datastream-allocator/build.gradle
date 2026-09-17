@@ -11,7 +11,7 @@ java {
 }
 
 ext {
-    opensearchVersion = '2.19.0'
+    opensearchVersion = findProperty('opensearchVersion') ?: '2.19.0'
 }
 
 repositories {
@@ -26,12 +26,27 @@ dependencies {
     testImplementation 'junit:junit:4.13.2'
 }
 
+task generatePluginDescriptor {
+    def outputDir = layout.buildDirectory.dir('plugin-metadata')
+    outputs.dir outputDir
+    doLast {
+        def dir = outputDir.get().asFile
+        dir.mkdirs()
+        new File(dir, 'plugin-descriptor.properties').text = """\
+            |description=Datastream-aware shard allocator that balances shards by datastream across nodes
+            |version=${version}
+            |name=datastream-allocator
+            |classname=io.github.hsiam261.datastreamallocator.DatastreamAllocatorPlugin
+            |java.version=11
+            |opensearch.version=${opensearchVersion}
+            |""".stripMargin()
+    }
+}
+
 task bundlePlugin(type: Zip) {
-    dependsOn jar
-    archiveFileName = "${rootProject.name}-${version}.zip"
+    dependsOn jar, generatePluginDescriptor
+    archiveFileName = "${rootProject.name}-${version}-opensearch-${opensearchVersion}.zip"
     destinationDirectory = layout.buildDirectory.dir('distributions')
     from jar
-    from('src/main/plugin-metadata') {
-        include 'plugin-descriptor.properties'
-    }
+    from(layout.buildDirectory.dir('plugin-metadata'))
 }
