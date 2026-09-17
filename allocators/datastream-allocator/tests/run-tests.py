@@ -468,8 +468,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Integration tests for datastream allocator")
     parser.add_argument("--no-teardown", action="store_true",
                         help="Leave the cluster running after tests")
-    parser.add_argument("--opensearch-version", default="2.19.0",
-                        help="OpenSearch version to test against (default: 2.19.0)")
+    parser.add_argument("--opensearch-version", required=True,
+                        help="OpenSearch version to test against (e.g. 2.19.0)")
+    parser.add_argument("--plugin-version", default="1.0.0",
+                        help="Plugin version to test (default: 1.0.0)")
     args = parser.parse_args()
 
     if not shutil.which("docker"):
@@ -477,16 +479,17 @@ def main() -> None:
         sys.exit(1)
 
     os_version = args.opensearch_version
+    plugin_version = args.plugin_version
     plugin_zip = os.path.join(
         PROJECT_DIR, "build", "distributions",
-        f"datastream-allocator-1.0.0-opensearch-{os_version}.zip",
+        f"datastream-allocator-{plugin_version}-opensearch-{os_version}.zip",
     )
     if not os.path.isfile(plugin_zip):
         print(f"Error: plugin not found at {plugin_zip}")
         print(f"Build it first: ./build.sh {os_version}")
         sys.exit(1)
 
-    env = {**os.environ, "OPENSEARCH_VERSION": os_version}
+    env = {**os.environ, "OPENSEARCH_VERSION": os_version, "PLUGIN_VERSION": plugin_version}
 
     log(f"Starting 3-node OpenSearch {os_version} cluster...")
     subprocess.run(
