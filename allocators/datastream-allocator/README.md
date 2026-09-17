@@ -57,6 +57,14 @@ Supported OpenSearch versions: 2.13–2.19.
 
 Integration tests run against a 3-node OpenSearch cluster in Docker with the plugin installed. Prerequisites: `docker`, `python3`.
 
+OpenSearch requires `vm.max_map_count` to be at least `262144`. If the Docker containers crash on startup, set it with:
+
+```bash
+sudo sysctl -w vm.max_map_count=262144
+```
+
+To make it persistent across reboots, add `vm.max_map_count=262144` to `/etc/sysctl.conf`.
+
 Build the plugin first, then run the tests:
 
 ```bash
