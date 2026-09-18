@@ -52,7 +52,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build plugin in Docker
-        run: ./build.sh ${{ inputs.opensearch_version }}
+        run: ./build.sh "$OPENSEARCH_VERSION"
+        env:
+          OPENSEARCH_VERSION: ${{ inputs.opensearch_version }}
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
