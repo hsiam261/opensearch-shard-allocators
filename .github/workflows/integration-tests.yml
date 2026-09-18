@@ -30,11 +30,6 @@ on:
         required: false
         type: string
         default: ""
-      ref:
-        description: "Git ref to check out (branch, tag, or SHA). Defaults to the calling workflow's ref."
-        required: false
-        type: string
-        default: ""
 
   workflow_dispatch:
     inputs:
@@ -72,10 +67,6 @@ on:
         description: "Space-separated list of tests to run (e.g. 'test_1 test_2'). Empty runs all."
         required: false
         type: string
-      ref:
-        description: "Git ref to check out (branch, tag, or SHA). Leave empty for current branch."
-        required: false
-        type: string
 
 jobs:
   integration-tests:
@@ -86,8 +77,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref || github.ref }}
 
       - name: Set vm.max_map_count for OpenSearch
         run: sudo sysctl -w vm.max_map_count=262144
