@@ -11,7 +11,7 @@ import sys
 import time
 import urllib.request
 import urllib.error
-from typing import Any
+from typing import Any, Callable, Optional
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
@@ -272,6 +272,18 @@ def delete_datastream(name: str) -> tuple[Any, Any]:
 
 
 ###############################################################################
+# Test registry
+###############################################################################
+
+
+TESTS: dict[str, tuple[Callable, Optional[Callable]]] = {}
+
+
+def register_test(name: str, run: Callable, cleanup: Optional[Callable] = None) -> None:
+    TESTS[name] = (run, cleanup)
+
+
+###############################################################################
 # Test 1: Basic Shard Placement with Rolling Rollovers
 ###############################################################################
 
@@ -337,6 +349,23 @@ def test_1() -> None:
     check_ds_balance(".ds-logs-*", "logs final")
     check_ds_balance(".ds-metrics-*", "metrics final")
     print()
+
+
+def cleanup_test_1() -> None:
+    log("Cleaning up test_1...")
+    for ds in ["logs", "metrics"]:
+        ds_result, tpl_result = delete_datastream(ds)
+        if not ds_result or not ds_result.get("acknowledged"):
+            print(f"{RED}WARNING: failed to delete datastream {ds}: {ds_result}{NC}")
+        if not tpl_result or not tpl_result.get("acknowledged"):
+            print(f"{RED}WARNING: failed to delete template {ds}: {tpl_result}{NC}")
+    time.sleep(5)
+    if not wait_green():
+        print(f"{RED}WARNING: cluster not green after cleanup{NC}")
+    print()
+
+
+register_test("test_1", test_1, cleanup_test_1)
 
 
 ###############################################################################
@@ -459,6 +488,23 @@ def test_2() -> None:
     print()
 
 
+def cleanup_test_2() -> None:
+    log("Cleaning up test_2...")
+    for ds in ["events", "audit"]:
+        ds_result, tpl_result = delete_datastream(ds)
+        if not ds_result or not ds_result.get("acknowledged"):
+            print(f"{RED}WARNING: failed to delete datastream {ds}: {ds_result}{NC}")
+        if not tpl_result or not tpl_result.get("acknowledged"):
+            print(f"{RED}WARNING: failed to delete template {ds}: {tpl_result}{NC}")
+    time.sleep(5)
+    if not wait_green():
+        print(f"{RED}WARNING: cluster not green after cleanup{NC}")
+    print()
+
+
+register_test("test_2", test_2, cleanup_test_2)
+
+
 ###############################################################################
 # Main
 ###############################################################################
@@ -472,7 +518,27 @@ def main() -> None:
                         help="OpenSearch version to test against (e.g. 2.19.0)")
     parser.add_argument("--plugin-version", default="1.0.0",
                         help="Plugin version to test (default: 1.0.0)")
+    parser.add_argument("--test", action="append", metavar="NAME",
+                        help=f"Run only the specified test(s). "
+                             f"Available: {', '.join(TESTS)}. "
+                             f"Can be repeated to run multiple tests.")
+    parser.add_argument("--list-tests", action="store_true",
+                        help="List available tests and exit")
     args = parser.parse_args()
+
+    if args.list_tests:
+        print("Available tests:")
+        for name in TESTS:
+            print(f"  {name}")
+        sys.exit(0)
+
+    selected_tests = list(TESTS.keys())
+    if args.test:
+        for name in args.test:
+            if name not in TESTS:
+                print(f"Error: unknown test '{name}'. Available: {', '.join(TESTS)}")
+                sys.exit(1)
+        selected_tests = args.test
 
     if not shutil.which("docker"):
         print("Error: docker is required but not installed")
@@ -517,21 +583,11 @@ def main() -> None:
             print(f"    {n['name']}  {n.get('node.role', '')}")
     print()
 
-    test_1()
-
-    log("Cleaning up test 1...")
-    for ds in ["logs", "metrics"]:
-        ds_result, tpl_result = delete_datastream(ds)
-        if not ds_result or not ds_result.get("acknowledged"):
-            print(f"{RED}WARNING: failed to delete datastream {ds}: {ds_result}{NC}")
-        if not tpl_result or not tpl_result.get("acknowledged"):
-            print(f"{RED}WARNING: failed to delete template {ds}: {tpl_result}{NC}")
-    time.sleep(5)
-    if not wait_green():
-        print(f"{RED}WARNING: cluster not green after cleanup{NC}")
-    print()
-
-    test_2()
+    for name in selected_tests:
+        run_fn, cleanup_fn = TESTS[name]
+        run_fn()
+        if cleanup_fn:
+            cleanup_fn()
 
     print()
     print("========================================")

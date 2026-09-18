@@ -25,6 +25,11 @@ on:
         required: false
         type: string
         default: ""
+      tests:
+        description: "Space-separated list of tests to run (e.g. 'test_1 test_2'). Empty runs all."
+        required: false
+        type: string
+        default: ""
 
   workflow_dispatch:
     inputs:
@@ -58,6 +63,10 @@ on:
         description: "Run ID of the workflow that produced the artifact (leave empty for current run)"
         required: false
         type: string
+      tests:
+        description: "Space-separated list of tests to run (e.g. 'test_1 test_2'). Empty runs all."
+        required: false
+        type: string
 
 jobs:
   integration-tests:
@@ -87,7 +96,18 @@ jobs:
           run-id: ${{ inputs.run_id == '' && github.run_id || inputs.run_id }}
 
       - name: Run integration tests
-        run: python3 tests/run-tests.py --opensearch-version "$OPENSEARCH_VERSION" --plugin-version "$ALLOCATOR_VERSION"
+        run: |
+          set -f
+          test_args=()
+          for t in $TESTS; do
+            if ! [[ "$t" =~ ^[a-zA-Z0-9_]+$ ]]; then
+              echo "Error: invalid test name: $t" >&2
+              exit 1
+            fi
+            test_args+=("--test" "$t")
+          done
+          python3 tests/run-tests.py --opensearch-version "$OPENSEARCH_VERSION" --plugin-version "$ALLOCATOR_VERSION" "${test_args[@]}"
         env:
           OPENSEARCH_VERSION: ${{ inputs.opensearch_version }}
           ALLOCATOR_VERSION: ${{ inputs.allocator_version }}
+          TESTS: ${{ inputs.tests }}
