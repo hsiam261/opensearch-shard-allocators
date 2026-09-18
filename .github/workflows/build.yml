@@ -1,0 +1,62 @@
+name: Build Allocator Plugin
+
+on:
+  workflow_call:
+    inputs:
+      allocator_name:
+        description: "Name of the allocator (directory under allocators/)"
+        required: true
+        type: string
+      allocator_version:
+        description: "Plugin version (e.g. 1.0.0)"
+        required: true
+        type: string
+      opensearch_version:
+        description: "OpenSearch version to build against (e.g. 2.19.0)"
+        required: true
+        type: string
+
+  workflow_dispatch:
+    inputs:
+      allocator_name:
+        description: "Name of the allocator (directory under allocators/)"
+        required: true
+        type: choice
+        options:
+          - datastream-allocator
+      allocator_version:
+        description: "Plugin version (e.g. 1.0.0)"
+        required: true
+        type: string
+      opensearch_version:
+        description: "OpenSearch version to build against"
+        required: true
+        type: choice
+        options:
+          - "2.19.0"
+          - "2.18.0"
+          - "2.17.0"
+          - "2.16.0"
+          - "2.15.0"
+          - "2.14.0"
+          - "2.13.0"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: allocators/${{ inputs.allocator_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build plugin in Docker
+        run: ./build.sh ${{ inputs.opensearch_version }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.allocator_name }}-${{ inputs.allocator_version }}-opensearch-${{ inputs.opensearch_version }}
+          path: allocators/${{ inputs.allocator_name }}/build/distributions/
+          retention-days: 14

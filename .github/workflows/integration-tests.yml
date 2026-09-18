@@ -1,0 +1,89 @@
+name: Integration Tests
+
+on:
+  workflow_call:
+    inputs:
+      allocator_name:
+        description: "Name of the allocator (directory under allocators/)"
+        required: true
+        type: string
+      allocator_version:
+        description: "Plugin version (e.g. 1.0.0)"
+        required: true
+        type: string
+      opensearch_version:
+        description: "OpenSearch version to test against (e.g. 2.19.0)"
+        required: true
+        type: string
+      artifact_name:
+        description: "Name of the artifact to download (omit to build from source)"
+        required: false
+        type: string
+        default: ""
+      run_id:
+        description: "Run ID of the workflow that produced the artifact (defaults to current run)"
+        required: false
+        type: string
+        default: ""
+
+  workflow_dispatch:
+    inputs:
+      allocator_name:
+        description: "Name of the allocator (directory under allocators/)"
+        required: true
+        type: choice
+        options:
+          - datastream-allocator
+      allocator_version:
+        description: "Plugin version (e.g. 1.0.0)"
+        required: true
+        type: string
+      opensearch_version:
+        description: "OpenSearch version to test against"
+        required: true
+        type: choice
+        options:
+          - "2.19.0"
+          - "2.18.0"
+          - "2.17.0"
+          - "2.16.0"
+          - "2.15.0"
+          - "2.14.0"
+          - "2.13.0"
+      artifact_name:
+        description: "Name of the artifact to download (leave empty to build from source)"
+        required: false
+        type: string
+      run_id:
+        description: "Run ID of the workflow that produced the artifact (leave empty for current run)"
+        required: false
+        type: string
+
+jobs:
+  integration-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: allocators/${{ inputs.allocator_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set vm.max_map_count for OpenSearch
+        run: sudo sysctl -w vm.max_map_count=262144
+
+      - name: Build plugin from source
+        if: inputs.artifact_name == ''
+        run: ./build.sh ${{ inputs.opensearch_version }}
+
+      - name: Download build artifact
+        if: inputs.artifact_name != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: allocators/${{ inputs.allocator_name }}/build/distributions/
+          run-id: ${{ inputs.run_id == '' && github.run_id || inputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run integration tests
+        run: python3 tests/run-tests.py --opensearch-version ${{ inputs.opensearch_version }} --plugin-version ${{ inputs.allocator_version }}
